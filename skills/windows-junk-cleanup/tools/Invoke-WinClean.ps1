@@ -143,6 +143,14 @@ param(
     [switch]   $Status,
     [int]      $SnoozeDays,
 
+    # Persistent "never clean this" list, remembered across runs.
+    [string[]] $Ignore,
+    [string[]] $IgnorePath,
+    [string[]] $Unignore,
+    [switch]   $ClearIgnored,
+    [switch]   $ListIgnored,
+    [switch]   $NoIgnoreList,
+
     [ValidateSet('Text', 'Json', 'Csv', 'Brief')]
     [string]   $Output = 'Text',
 
@@ -195,9 +203,12 @@ $ExcludeSection = Expand-WinCleanListArg $ExcludeSection
 $Entry          = Expand-WinCleanListArg $Entry
 $ExcludeEntry   = Expand-WinCleanListArg $ExcludeEntry
 $Protect        = Expand-WinCleanListArg $Protect
+$Ignore         = Expand-WinCleanListArg $Ignore
+$IgnorePath     = Expand-WinCleanListArg $IgnorePath
+$Unignore       = Expand-WinCleanListArg $Unignore
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-foreach ($lib in @('Safety.ps1', 'Paths.ps1', 'Winapp2.ps1', 'Engine.ps1', 'SystemRules.ps1', 'Database.ps1', 'Status.ps1')) {
+foreach ($lib in @('Safety.ps1', 'Paths.ps1', 'Winapp2.ps1', 'Engine.ps1', 'SystemRules.ps1', 'Database.ps1', 'Status.ps1', 'IgnoreList.ps1')) {
     . (Join-Path $here "lib\$lib")
 }
 
@@ -205,6 +216,68 @@ function Write-WinCleanHost {
     param([string] $Message, [string] $Colour = 'Gray')
     if ($Quiet -or $Output -ne 'Text') { return }
     Write-Host $Message -ForegroundColor $Colour
+}
+
+# Only Text output is for humans. Json/Csv/Brief must stay byte-clean for whatever is
+# parsing them, so every piece of chrome below is gated on this.
+$script:Pretty = ($Output -eq 'Text') -and (-not $Quiet)
+
+if ($script:Pretty) {
+    # Without this, box-drawing characters and the icons come out as mojibake under the
+    # console's default OEM codepage.
+    try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
+}
+
+# [char] is 16-bit, so anything above U+FFFF (the padlock and broom) has to be built as a
+# surrogate pair via ConvertFromUtf32 - assigning the raw codepoint throws.
+$script:Icon = @{
+    Ok      = [string][char]0x2713                   # check
+    Fail    = [string][char]0x2717                   # ballot X
+    Warn    = [string][char]0x26A0                   # warning sign
+    Ignored = [string][char]0x2298                   # circled division slash
+    Lock    = [char]::ConvertFromUtf32(0x1F512)      # padlock
+    Broom   = [char]::ConvertFromUtf32(0x1F9F9)      # broom
+}
+
+$script:ProgressWidth = 24
+$script:ProgressShown = $false
+
+# A progress bar redraws itself with a carriage return, which only works on a live
+# console. When the output is piped or captured - which is how every agent and both
+# shims run this - the CR is just another character and each redraw is appended, turning
+# a 4,000-rule scan into 100 KB of bar. So: only animate when a human is actually watching.
+$script:ShowProgress = $script:Pretty
+try { if ([Console]::IsOutputRedirected) { $script:ShowProgress = $false } } catch { }
+
+<#
+    An in-place progress bar. Write-Progress alone is invisible when the script is
+    launched with -File from another process, which is exactly how the shims and any
+    agent run it - so the long pause in the middle of a scan looked like a hang.
+#>
+function Show-WinCleanProgress {
+    param([int] $Current, [int] $Total, [string] $Label)
+
+    if (-not $script:ShowProgress -or $Total -le 0) { return }
+
+    $pct    = [math]::Min(100, [int](100 * $Current / $Total))
+    $filled = [int]($script:ProgressWidth * $pct / 100)
+    $bar    = ([string][char]0x2588) * $filled + ([string][char]0x2591) * ($script:ProgressWidth - $filled)
+
+    # Keep the whole line inside the window so it overwrites cleanly instead of wrapping.
+    $room = 40
+    try { $room = [math]::Max(20, [Console]::WindowWidth - $script:ProgressWidth - 22) } catch { }
+    if ($Label.Length -gt $room) { $Label = $Label.Substring(0, $room - 1) + [char]0x2026 }
+
+    Write-Host ("`r  [{0}] {1,3}%  {2}" -f $bar, $pct, $Label.PadRight($room)) -NoNewline -ForegroundColor DarkCyan
+    $script:ProgressShown = $true
+}
+
+function Clear-WinCleanProgress {
+    if (-not $script:ShowProgress -or -not $script:ProgressShown) { return }
+    $w = 80
+    try { $w = [Console]::WindowWidth - 1 } catch { }
+    Write-Host ("`r" + (' ' * $w) + "`r") -NoNewline
+    $script:ProgressShown = $false
 }
 
 function Format-WinCleanBytesShort {
@@ -254,6 +327,44 @@ $dataDir = Get-WinCleanDataDir
 if (-not $DatabasePath) { $DatabasePath = Join-Path $dataDir 'winapp2.ini' }
 
 # ---- Standalone modes: these do their job and exit without scanning anything ----------
+
+if ($Ignore.Count -gt 0 -or $IgnorePath.Count -gt 0) {
+    $r = Add-WinCleanIgnore -Entry $Ignore -Path $IgnorePath
+    if ($Output -eq 'Json') { $r | ConvertTo-Json -Compress }
+    else {
+        foreach ($a in $r.Added)          { Write-Output "ignored: $a" }
+        foreach ($a in $r.AlreadyPresent) { Write-Output "already ignored: $a" }
+        $l = Get-WinCleanIgnoreList
+        Write-Output "Ignore list now holds $($l.Entries.Count) entry pattern(s) and $($l.Paths.Count) path(s)."
+    }
+    return
+}
+
+if ($Unignore.Count -gt 0 -or $ClearIgnored) {
+    $r = Remove-WinCleanIgnore -Pattern $Unignore -All:$ClearIgnored
+    if ($Output -eq 'Json') { $r | ConvertTo-Json -Compress }
+    else {
+        if ($ClearIgnored) { Write-Output "Ignore list cleared ($($r.Count) item(s) removed)." }
+        else {
+            foreach ($a in $r.Removed)  { Write-Output "no longer ignored: $a" }
+            foreach ($a in $r.NotFound) { Write-Output "not on the list: $a" }
+        }
+    }
+    return
+}
+
+if ($ListIgnored) {
+    $l = Get-WinCleanIgnoreList
+    if ($Output -eq 'Json') {
+        $l | ConvertTo-Json -Compress
+    } elseif ($l.Entries.Count -eq 0 -and $l.Paths.Count -eq 0) {
+        Write-Output 'Ignore list is empty. Add to it with -Ignore <pattern> or -IgnorePath <dir>.'
+    } else {
+        if ($l.Entries.Count) { Write-Output 'Ignored entries/categories:'; $l.Entries | ForEach-Object { Write-Output "  $_" } }
+        if ($l.Paths.Count)   { Write-Output 'Ignored paths:';              $l.Paths   | ForEach-Object { Write-Output "  $_" } }
+    }
+    return
+}
 
 if ($SnoozeDays -gt 0) {
     $until = Set-WinCleanSnooze -Days $SnoozeDays
@@ -365,6 +476,21 @@ $selected = @($rules | Where-Object {
     (Test-WinCleanNameFilter -Value $_.Name     -Include $Entry   -Exclude $ExcludeEntry)
 })
 
+# The persistent ignore list. Applied after the per-run filters and before anything is
+# scanned, so an ignored rule is never even resolved to paths - it cannot be deleted by
+# a mistake further down. -NoIgnoreList exists so you can audit what the list is hiding
+# without having to empty it.
+$ignoreList   = Get-WinCleanIgnoreList
+$ignoredRules = @()
+
+if (-not $NoIgnoreList -and $ignoreList.Entries.Count -gt 0) {
+    $ignoredRules = @($selected |
+        Where-Object { Test-WinCleanIgnored -Name $_.Name -Category $_.Category -Patterns $ignoreList.Entries })
+    $selected = @($selected |
+        Where-Object { -not (Test-WinCleanIgnored -Name $_.Name -Category $_.Category -Patterns $ignoreList.Entries) })
+}
+$ignoredCount = $ignoredRules.Count
+
 # The listings run BEFORE the warning filter on purpose. Filtering them too would hide
 # entries the caller explicitly asked about - "Crash Dumps" and "Windows Update Cache"
 # both carry a Warning - and make the ruleset look smaller than it is. The listing shows
@@ -404,11 +530,15 @@ if (-not $IncludeWarnings) {
 # --------------------------------------------------------------------------------------
 
 $isAdmin   = Test-WinCleanIsAdmin
-$protected = Get-WinCleanProtectedPath -Additional $Protect
+$extraProtected = @($Protect)
+if (-not $NoIgnoreList -and $ignoreList.Paths.Count -gt 0) { $extraProtected += $ignoreList.Paths }
+$protected = Get-WinCleanProtectedPath -Additional $extraProtected
 $tokenMap  = Get-WinCleanTokenMap
 Clear-WinCleanDetectionCache
 
-Write-WinCleanHost "Rules loaded: $($selected.Count)   Elevated: $isAdmin   Mode: $(if ($Apply) { 'APPLY (will delete)' } else { 'DRY RUN (no deletions)' })" $(if ($Apply) { 'Yellow' } else { 'Cyan' })
+Write-WinCleanHost ("{0} ai-win-clean  -  {1} rule(s) selected, elevated: {2}, mode: {3}" -f `
+    $script:Icon.Broom, $selected.Count, $isAdmin, $(if ($Apply) { 'APPLY (will delete)' } else { 'DRY RUN (no deletions)' })) `
+    $(if ($Apply) { 'Yellow' } else { 'Cyan' })
 if ($withWarning.Count -gt 0) {
     Write-WinCleanHost "$($withWarning.Count) entries skipped because they carry a warning (use -IncludeWarnings to include them)." 'DarkYellow'
 }
@@ -425,9 +555,8 @@ $stopwatch = [Diagnostics.Stopwatch]::StartNew()
 
 foreach ($rule in $selected) {
     $index++
-    if (-not $Quiet -and $Output -eq 'Text' -and ($index % 25 -eq 0 -or $index -eq $selected.Count)) {
-        Write-Progress -Activity 'Scanning' -Status "$index / $($selected.Count)  $($rule.Name)" `
-                       -PercentComplete ([math]::Min(100, 100 * $index / [math]::Max(1, $selected.Count)))
+    if ($index % 5 -eq 0 -or $index -eq $selected.Count) {
+        Show-WinCleanProgress -Current $index -Total $selected.Count -Label $rule.Name
     }
 
     if (-not (Test-WinCleanDetection -Entry $rule -TokenMap $tokenMap)) { continue }
@@ -447,7 +576,34 @@ foreach ($rule in $selected) {
         $results.Add($target)
     }
 }
-Write-Progress -Activity 'Scanning' -Completed
+Clear-WinCleanProgress
+
+# Ignored rules are scanned too, but ONLY to report what they are holding. They never
+# enter $results, so nothing here can be deleted - the point is to answer "what is my
+# ignore list costing me?" without the user having to disable it to find out.
+# A separate seen-set: sharing the active one would let an ignored rule claim files and
+# silently suppress an active rule that also covers them.
+$ignoredSeen    = New-Object System.Collections.Generic.HashSet[string] ([StringComparer]::OrdinalIgnoreCase)
+$ignoredReport  = New-Object System.Collections.Generic.List[object]
+$ignoredBytes   = [int64] 0
+$ignoredFiles   = 0
+
+$ii = 0
+foreach ($rule in $ignoredRules) {
+    $ii++
+    Show-WinCleanProgress -Current $ii -Total $ignoredRules.Count -Label "(ignored) $($rule.Name)"
+    if (-not (Test-WinCleanDetection -Entry $rule -TokenMap $tokenMap)) { continue }
+    $t = Get-WinCleanEntryTarget -Entry $rule -ProtectedPaths $protected -TokenMap $tokenMap `
+                                 -OlderThanDays $OlderThanDays -MinDepth $MinDepth -SeenFiles $ignoredSeen
+    if ($t.FileCount -eq 0) { continue }
+    $ignoredBytes += $t.Bytes
+    $ignoredFiles += $t.FileCount
+    $ignoredReport.Add([pscustomobject] @{
+        Name = $t.Entry; Category = $t.Category; Files = $t.FileCount
+        Bytes = $t.Bytes; Size = Format-WinCleanBytes $t.Bytes
+    })
+}
+Clear-WinCleanProgress
 $stopwatch.Stop()
 
 # Measure-Object -Property returns nothing at all for an empty collection, so reading
@@ -573,6 +729,16 @@ $report = [pscustomobject] @{
     FailedCount     = $removal.FailedCount
     BlockedCount    = $allBlocked.Count
     SkippedWarnings = $withWarning.Count
+    # Rules held back by the persistent ignore list. Non-zero explains a total
+    # that is smaller than expected without the caller having to guess why.
+    # Rules held back by the persistent ignore list, and what they are holding. Measured
+    # but never deletable - this answers "what is my ignore list costing me?" without
+    # the user having to turn the list off to find out.
+    IgnoredCount    = $ignoredCount
+    IgnoredBytes    = $ignoredBytes
+    IgnoredSize     = Format-WinCleanBytes $ignoredBytes
+    IgnoredFiles    = $ignoredFiles
+    IgnoredEntries  = @($ignoredReport | Sort-Object Bytes -Descending)
     Entries         = @($results | Sort-Object Bytes -Descending | ForEach-Object {
                           [pscustomobject] @{
                               Name      = $_.Entry
@@ -616,6 +782,11 @@ switch ($Output) {
         }
         if ($report.Entries.Count -gt 5) { $lines.Add("  +$($report.Entries.Count - 5) more") }
         if (-not $isAdmin -and $adminLimited -gt 0) { $lines.Add("NOTE not elevated; $adminLimited rule(s) undercounted") }
+        if ($ignoredCount -gt 0) {
+            $top = @($ignoredReport | Sort-Object Bytes -Descending | Select-Object -First 3 |
+                     ForEach-Object { "$($_.Name) ($($_.Size))" })
+            $lines.Add("IGNORED $(Format-WinCleanBytesShort $ignoredBytes) kept by your ignore list ($ignoredCount rule(s)): $($top -join ', ')")
+        }
         $text = ($lines -join [Environment]::NewLine)
         if ($ReportPath) { Set-Content -LiteralPath $ReportPath -Value $text -Encoding utf8 }
         Write-Output $text
@@ -636,22 +807,38 @@ switch ($Output) {
         Write-Host ''
         Write-Host ('-' * 62) -ForegroundColor DarkGray
         if ($applied) {
-            Write-Host ("  Deleted:     {0} files, {1}" -f $removal.Deleted, (Format-WinCleanBytes $removal.BytesFreed)) -ForegroundColor Green
+            Write-Host ("  {0} Cleaned {1} across {2} files" -f $script:Icon.Ok, (Format-WinCleanBytes $removal.BytesFreed), $removal.Deleted) -ForegroundColor Green
             if ($removal.FailedCount -gt 0) {
-                Write-Host ("  Locked/failed: {0} (usually files an app still has open)" -f $removal.FailedCount) -ForegroundColor DarkYellow
+                Write-Host ("  {0} {1} file(s) were locked by a running app and left in place" -f $script:Icon.Warn, $removal.FailedCount) -ForegroundColor DarkYellow
             }
         } else {
-            Write-Host ("  Would free:  {0} across {1} files in {2} entries" -f $report.TotalSize, $totalFiles, $results.Count) -ForegroundColor Cyan
-            Write-Host '  DRY RUN - nothing was deleted. Re-run with -Apply to act on this.' -ForegroundColor Cyan
+            Write-Host ("  {0} Would free {1} across {2} files in {3} entries" -f $script:Icon.Ok, $report.TotalSize, $totalFiles, $results.Count) -ForegroundColor Cyan
+            Write-Host '    DRY RUN - nothing was deleted. Re-run with -Apply to act on this.' -ForegroundColor Cyan
         }
+
+        # What the ignore list is holding back, and what it costs. Shown every run so the
+        # list never quietly becomes the reason a cleanup "stopped working".
+        if ($ignoredCount -gt 0) {
+            Write-Host ''
+            Write-Host ("  {0} Kept by your ignore list: {1} across {2} rule(s)" -f $script:Icon.Ignored, (Format-WinCleanBytes $ignoredBytes), $ignoredCount) -ForegroundColor DarkYellow
+            foreach ($ig in ($ignoredReport | Sort-Object Bytes -Descending | Select-Object -First 8)) {
+                Write-Host ("      {0,10}  {1}" -f $ig.Size, $ig.Name) -ForegroundColor DarkGray
+            }
+            if ($ignoredReport.Count -gt 8) {
+                Write-Host ("      ... and {0} more" -f ($ignoredReport.Count - 8)) -ForegroundColor DarkGray
+            }
+            Write-Host '      Manage with -ListIgnored / -Unignore <pattern>, or -NoIgnoreList for one run.' -ForegroundColor DarkGray
+            Write-Host ''
+        }
+
         if ($allBlocked.Count -gt 0) {
-            Write-Host ("  Blocked by safety rules: {0} targets" -f $allBlocked.Count) -ForegroundColor DarkGray
+            Write-Host ("  {0} {1} target(s) refused by the safety rules" -f $script:Icon.Lock, $allBlocked.Count) -ForegroundColor DarkGray
         }
         if (-not $isAdmin) {
-            $suffix = if ($adminLimited -gt 0) { " ($adminLimited rule(s) needing elevation ran without it - treat their sizes as a floor)" } else { '' }
-            Write-Host "  Not elevated - system-level targets were skipped or partially scanned.$suffix" -ForegroundColor DarkGray
+            $suffix = if ($adminLimited -gt 0) { " - $adminLimited rule(s) needing elevation ran without it, so their sizes are a floor" } else { '' }
+            Write-Host ("  {0} Not elevated; system-level targets were skipped or partly scanned{1}" -f $script:Icon.Warn, $suffix) -ForegroundColor DarkGray
         }
-        Write-Host ("  Scan took {0}s" -f $report.ScanSeconds) -ForegroundColor DarkGray
+        Write-Host ("    Scan took {0}s" -f $report.ScanSeconds) -ForegroundColor DarkGray
 
         if ($ReportPath) {
             $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $ReportPath -Encoding utf8

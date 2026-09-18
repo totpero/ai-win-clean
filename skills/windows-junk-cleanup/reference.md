@@ -112,6 +112,30 @@ Status values: `Updated`, `Current` (304, nothing transferred), `Offline`, `Reje
 State lives in `%LOCALAPPDATA%\ai-win-clean\state.json` — ETag, version, entry count,
 flavour, download and check timestamps, plus the last-clean timestamp and any snooze.
 
+### Ignore list (persistent)
+
+| Parameter | Type | Meaning |
+|---|---|---|
+| `-Ignore` | string[] | Add rule-name or category patterns to the stored ignore list, then exit. Wildcards allowed. |
+| `-IgnorePath` | string[] | Add directories to the stored protected-path list, then exit. |
+| `-Unignore` | string[] | Remove items. Matched exactly, not as wildcards, so removing one item cannot remove others. |
+| `-ClearIgnored` | switch | Empty the whole list. |
+| `-ListIgnored` | switch | Print the list and exit. |
+| `-NoIgnoreList` | switch | Ignore the ignore list for this run. |
+
+Stored in `state.json`, so it applies to every later run without being retyped —
+including scheduled and agent-driven ones.
+
+Ignored rules are **still scanned**, and reported under `IgnoredCount`, `IgnoredBytes`,
+`IgnoredSize`, `IgnoredFiles` and `IgnoredEntries` (name, category, files, bytes). They
+are excluded from `TotalBytes` and can never be deleted. Measuring them means a run can
+answer "what is my ignore list costing me?" without the user having to disable it — and
+it stops the list quietly becoming the reason a cleanup "stopped working".
+
+`-Ignore` suppresses a *rule*; if a different rule also matches those files they are
+still cleaned. `-IgnorePath` is the stronger guarantee: those directories join the
+protected set and no rule can touch them.
+
 ### Notification
 
 | Parameter | Type | Default | Meaning |
@@ -349,7 +373,7 @@ skills/windows-junk-cleanup/
       Engine.ps1               detection, scanning, removal
       SystemRules.ps1          built-in Windows ruleset
     tests/
-      Test-WinClean.ps1        138 sandbox tests
+      Test-WinClean.ps1        169 sandbox tests
 ```
 
 ## Attribution

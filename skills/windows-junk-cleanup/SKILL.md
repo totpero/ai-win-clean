@@ -107,7 +107,11 @@ Use `win-clean.cmd` from cmd/PowerShell, `win-clean.sh` from bash/WSL, or call
 | Include entries carrying a caveat | `-IncludeWarnings` |
 | Also clean registry MRU values | `-IncludeRegistry` |
 | Empty the Recycle Bin | `-EmptyRecycleBin` |
-| Protect extra paths | `-Protect 'D:\Keep'` |
+| Protect extra paths (this run) | `-Protect 'D:\Keep'` |
+| Never clean this again (remembered) | `-Ignore 'Microsoft NuGet Package Cache *'` |
+| Never touch this path again | `-IgnorePath 'D:\Keep'` |
+| Show / undo the ignore list | `-ListIgnored`, `-Unignore <pattern>`, `-ClearIgnored` |
+| Bypass the ignore list once | `-NoIgnoreList` |
 | Audit trail of deletions | `-LogPath clean.jsonl` |
 | Refresh the rule database | `-UpdateDatabase` |
 | Check for updates without applying | `-CheckUpdate` |
@@ -129,6 +133,30 @@ anything — an HTML error page, a truncated file, or a sudden collapse in entry
 rejected and the existing database is kept. The previous copy is retained for
 `-RollbackDatabase`. If the network is unreachable the run continues on the existing
 database and says so.
+
+## Never Cleaning Something Again
+
+`-ExcludeEntry` and `-Protect` last one run. For a standing decision, use the ignore
+list — it is stored and applied to every later run, including unattended ones:
+
+```bash
+win-clean.cmd -Ignore 'Microsoft NuGet Package Cache *,*Squirrel*'
+win-clean.cmd -IgnorePath 'D:\Projects'
+win-clean.cmd -ListIgnored
+```
+
+Ignored rules are still **scanned and reported**, so every run tells you what the list
+is holding and how much it is worth — they simply never enter the deletable set:
+
+```
+⊘ Kept by your ignore list: 4.16 GB across 2 rule(s)
+       3.44 GB  Microsoft NuGet Package Cache *
+     739.26 MB  Squirrel.Windows *
+```
+
+`-Ignore` skips a *rule*. If another rule also covers those files, they are still
+cleaned — use `-IgnorePath` to protect files from every rule. `-NoIgnoreList` shows
+what you are missing without having to empty the list.
 
 ## Being Told When to Clean
 
@@ -225,6 +253,6 @@ deeper inside a protected path is allowed too; that is what most real rules do.
 powershell -NoProfile -ExecutionPolicy Bypass -File skills/windows-junk-cleanup/tools/tests/Test-WinClean.ps1
 ```
 
-138 tests build a throwaway filesystem and assert exactly which files are deleted and
+169 tests build a throwaway filesystem and assert exactly which files are deleted and
 which survive, including junction traversal, exclusions and protected paths. Run this
 after changing anything under `tools/lib/`.

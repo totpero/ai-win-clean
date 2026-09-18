@@ -20,7 +20,7 @@ $ErrorActionPreference = 'Stop'
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $lib  = Join-Path (Split-Path -Parent $here) 'lib'
-foreach ($f in @('Safety.ps1', 'Paths.ps1', 'Winapp2.ps1', 'Engine.ps1', 'SystemRules.ps1', 'Database.ps1', 'Status.ps1')) {
+foreach ($f in @('Safety.ps1', 'Paths.ps1', 'Winapp2.ps1', 'Engine.ps1', 'SystemRules.ps1', 'Database.ps1', 'Status.ps1', 'IgnoreList.ps1')) {
     . (Join-Path $lib $f)
 }
 
@@ -667,6 +667,103 @@ Assert-Equal 'snooze is reported as the reason'          'Snoozed' $s.Reason
 Clear-WinCleanSnooze
 $s = Get-WinCleanDueStatus -MinFreePercent 101 -DatabasePath $goodDb
 Assert 'clearing the snooze restores the prompt' $s.Due
+
+# ======================================================================================
+Describe 'Persistent ignore list'
+# ======================================================================================
+
+# Still running against the sandboxed LOCALAPPDATA from the block above.
+$l = Get-WinCleanIgnoreList
+Assert-Equal 'starts empty (entries)' 0 $l.Entries.Count
+Assert-Equal 'starts empty (paths)'   0 $l.Paths.Count
+
+$r = Add-WinCleanIgnore -Entry @('Microsoft NuGet Package Cache *', '*Squirrel*') -Path @('D:\Keep')
+Assert-Equal 'three items added' 3 $r.Added.Count
+$l = Get-WinCleanIgnoreList
+Assert-Equal 'two entry patterns stored' 2 $l.Entries.Count
+Assert-Equal 'one path stored'           1 $l.Paths.Count
+
+# Adding the same thing twice must not duplicate it.
+$r = Add-WinCleanIgnore -Entry @('*Squirrel*')
+Assert-Equal 'duplicate not added again'  0 $r.Added.Count
+Assert-Equal 'duplicate reported as such' 1 $r.AlreadyPresent.Count
+Assert-Equal 'list length unchanged'      2 (Get-WinCleanIgnoreList).Entries.Count
+
+# Paths are normalised, so the same directory written differently is one entry.
+Add-WinCleanIgnore -Path @('d:/keep/') | Out-Null
+Assert-Equal 'path normalised, not duplicated' 1 (Get-WinCleanIgnoreList).Paths.Count
+
+# Matching: by exact name, by wildcard, and by category.
+$pat = (Get-WinCleanIgnoreList).Entries
+Assert 'matches an exact-ish rule name' (Test-WinCleanIgnored -Name 'Microsoft NuGet Package Cache *' -Category 'Applications' -Patterns $pat)
+Assert 'matches by wildcard'            (Test-WinCleanIgnored -Name 'Squirrel.Windows *' -Category 'Applications' -Patterns $pat)
+Assert 'does not match unrelated rule'  (-not (Test-WinCleanIgnored -Name 'Google Chrome Caches *' -Category 'Google Chrome Web Browser' -Patterns $pat))
+
+Add-WinCleanIgnore -Entry @('Games') | Out-Null
+Assert 'a pattern can match the category' (Test-WinCleanIgnored -Name 'Some Game *' -Category 'Games' -Patterns (Get-WinCleanIgnoreList).Entries)
+
+# Removal is exact, not wildcard-expanded: taking one item off the list must not
+# silently take others with it.
+$r = Remove-WinCleanIgnore -Pattern @('*Squirrel*')
+Assert-Equal 'removal reports one removed' 1 $r.Removed.Count
+$l = Get-WinCleanIgnoreList
+Assert 'removed pattern is gone'    ($l.Entries -notcontains '*Squirrel*')
+Assert 'other patterns survive'     ($l.Entries -contains 'Microsoft NuGet Package Cache *')
+
+$r = Remove-WinCleanIgnore -Pattern @('never-was-on-the-list')
+Assert-Equal 'unknown pattern reported as not found' 1 $r.NotFound.Count
+
+$r = Remove-WinCleanIgnore -All
+$l = Get-WinCleanIgnoreList
+Assert-Equal 'clear empties entries' 0 $l.Entries.Count
+Assert-Equal 'clear empties paths'   0 $l.Paths.Count
+
+# End to end through the CLI: an ignored rule must not appear in the scan at all.
+$ignIni = Join-Path $sandbox 'ign.ini'
+# Each rule gets its own directory. Pointing both at the same files would make the
+# second one match nothing - cross-entry deduplication claims a file once - and the
+# test would be measuring dedupe rather than the ignore list.
+@"
+[Keeper Entry *]
+Section=IgnoreTest
+FileKey1=%WINCLEANTESTROOT%\ign\keep|*.tmp
+[Droppable Entry *]
+Section=IgnoreTest
+FileKey1=%WINCLEANTESTROOT%\ign\drop|*.tmp
+"@ | Set-Content -LiteralPath $ignIni -Encoding utf8
+New-TestFile 'ign\keep\a.tmp' | Out-Null
+New-TestFile 'ign\drop\b.tmp' | Out-Null
+
+function Invoke-CliIgnore {
+    param([string[]] $CliArgs)
+    return (Invoke-CliRaw (@('-RuleSet', 'Winapp2', '-DatabasePath', $ignIni) + $CliArgs))
+}
+
+$before = (Invoke-CliIgnore @('-Output', 'Json', '-Quiet')) | ConvertFrom-Json
+Assert-Equal 'both rules match before ignoring' 2 $before.EntriesMatched
+
+Invoke-CliIgnore @('-Ignore', 'Keeper Entry *') | Out-Null
+$after = (Invoke-CliIgnore @('-Output', 'Json', '-Quiet')) | ConvertFrom-Json
+Assert-Equal 'ignored rule is excluded from the scan' 1 $after.EntriesMatched
+Assert-Equal 'report states how many were ignored'    1 $after.IgnoredCount
+# IgnoredEntries carries objects, not names: each one reports the size it is holding so
+# the user can see what the ignore list costs without disabling it.
+$ignoredNamesOut = @($after.IgnoredEntries | ForEach-Object { $_.Name })
+Assert 'report names what was ignored'      ($ignoredNamesOut -contains 'Keeper Entry *')
+Assert 'report sizes what was ignored'      ($after.IgnoredBytes -gt 0)
+Assert 'ignored size is human readable'     ([bool]$after.IgnoredSize)
+Assert 'ignored file count reported'        ($after.IgnoredFiles -ge 1)
+
+$bypass = (Invoke-CliIgnore @('-Output', 'Json', '-Quiet', '-NoIgnoreList')) | ConvertFrom-Json
+Assert-Equal 'NoIgnoreList restores the rule' 2 $bypass.EntriesMatched
+Assert-Equal 'NoIgnoreList reports nothing ignored' 0 $bypass.IgnoredCount
+
+# The whole point of the split: the ignored rule's bytes are measured and reported, but
+# are NOT part of the deletable total. Bypassing the list moves them back into it.
+Assert 'ignored bytes are kept out of the deletable total' ($after.TotalBytes -lt $bypass.TotalBytes)
+Assert 'ignored + deletable accounts for the whole set'    (($after.TotalBytes + $after.IgnoredBytes) -eq $bypass.TotalBytes)
+
+Assert 'ignored rule deleted nothing' (Test-Exists 'ign\keep\a.tmp')
 
 $env:LOCALAPPDATA = $realLocalAppData
 
