@@ -1,7 +1,7 @@
 ---
 name: windows-junk-cleanup
-description: Use when a Windows machine needs disk space reclaimed or junk removed - C: drive full or nearly full, "clean up my PC", browser and application caches, temp files, Windows Update leftovers, crash dumps, log files, thumbnail cache, or a request for CCleaner-style cleaning. Also use when asked what is consuming disk space before deleting anything.
-license: Tool is MIT. Bundled rules derive from winapp2 (CC-BY-SA-4.0).
+description: 'Use when a Windows machine needs disk space reclaimed or junk removed - the C: drive is full or nearly full, "clean up my PC", browser and application caches, temp files, Windows Update leftovers, crash dumps, log files, thumbnail cache, or a request for CCleaner-style cleaning. Also use when asked what is consuming disk space before deleting anything.'
+license: MIT
 ---
 
 # Windows Junk Cleanup

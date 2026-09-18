@@ -1,0 +1,6 @@
+# Shell scripts must keep LF or they fail under bash/WSL with "bad interpreter: ...^M"
+*.sh text eol=lf
+
+# Windows-only scripts are fine either way; pin them for consistency
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
