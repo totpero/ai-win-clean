@@ -14,7 +14,7 @@ npx skills add totpero/ai-win-clean
 
 [![Agent Skill](https://img.shields.io/badge/agent-skill-0EA5E9?style=flat-square)](https://www.skills.sh)
 [![Rules](https://img.shields.io/badge/winapp2-~4%2C000%20rules-38BDF8?style=flat-square)](https://github.com/MoscaDotTo/Winapp2)
-[![Tests](https://img.shields.io/badge/tests-169%20passing-22C55E?style=flat-square)](#tests)
+[![Tests](https://img.shields.io/badge/tests-182%20passing-22C55E?style=flat-square)](#tests)
 [![License](https://img.shields.io/badge/license-MIT-64748B?style=flat-square)](LICENSE)
 
 </div>
@@ -38,7 +38,7 @@ a dozen hard-coded paths, different every time, following junctions straight out
 own allowlist, with nothing machine-readable at the end.
 
 This replaces that with one audited tool: ~14,000 rules, protected paths refused by
-construction, deterministic output, 169 tests.
+construction, deterministic output, 182 tests.
 
 ## Install
 
@@ -164,7 +164,7 @@ Details and rationale: [`reference.md`](skills/windows-junk-cleanup/reference.md
 powershell -NoProfile -ExecutionPolicy Bypass -File skills\windows-junk-cleanup\tools\tests\Test-WinClean.ps1
 ```
 
-169 tests build a throwaway filesystem and assert exactly which files are deleted and
+182 tests build a throwaway filesystem and assert exactly which files are deleted and
 which survive — flags, filters, exclusions, detection gating, age filters, mid-path
 wildcards, junction traversal, protected paths, and that a dry run deletes nothing.
 
@@ -182,7 +182,7 @@ skills/windows-junk-cleanup/
     win-clean.cmd / .sh        cmd and bash/WSL shims
     lib/                       Safety, Paths, Winapp2, Engine,
                                SystemRules, Database, Status
-    tests/                     169 sandbox tests
+    tests/                     182 sandbox tests
 ```
 
 ## Licence

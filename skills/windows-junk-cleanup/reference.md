@@ -133,8 +133,18 @@ answer "what is my ignore list costing me?" without the user having to disable i
 it stops the list quietly becoming the reason a cleanup "stopped working".
 
 `-Ignore` suppresses a *rule*; if a different rule also matches those files they are
-still cleaned. `-IgnorePath` is the stronger guarantee: those directories join the
-protected set and no rule can touch them.
+still cleaned. `-IgnorePath` is the stronger guarantee: no rule can touch those
+directories at all.
+
+The two protection lists are deliberately not the same thing:
+
+| List | Source | Semantics |
+|---|---|---|
+| Protected | built in | A *surgical, non-recursive* filter directly inside is still allowed. `%WinDir%\|*.log` depends on this; without it a large part of the database stops working. |
+| Excluded | `-Protect`, `-IgnorePath` | **Absolute.** Nothing at the directory, anywhere beneath it, or recursing into it from an ancestor, for any filter or flag. |
+
+The distinction matters: a path *you* named means "never touch this", and applying the
+built-in exemption to it would let `D:\Projects|*.tmp` through a `-IgnorePath D:\Projects`.
 
 ### Notification
 
@@ -373,7 +383,7 @@ skills/windows-junk-cleanup/
       Engine.ps1               detection, scanning, removal
       SystemRules.ps1          built-in Windows ruleset
     tests/
-      Test-WinClean.ps1        169 sandbox tests
+      Test-WinClean.ps1        182 sandbox tests
 ```
 
 ## Attribution

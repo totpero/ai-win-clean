@@ -765,6 +765,50 @@ Assert 'ignored + deletable accounts for the whole set'    (($after.TotalBytes +
 
 Assert 'ignored rule deleted nothing' (Test-Exists 'ign\keep\a.tmp')
 
+# ======================================================================================
+Describe 'User-excluded paths are absolute'
+# ======================================================================================
+
+# The built-in protected list deliberately permits a surgical, non-recursive filter -
+# "%WinDir%|*.log" has to keep working. Applying that same exemption to a path the USER
+# named was a real hole: -IgnorePath 'D:\Projects' did not stop a rule targeting
+# 'D:\Projects|*.tmp'. User exclusions admit no exemption at all.
+$guard    = Join-Path $sandbox 'userexcl'
+$protAll  = Get-WinCleanProtectedPath
+
+function ExDeny { param($d, $f, $g) return -not (Test-WinCleanTarget -Directory $d -Filter $f -Flag $g -ProtectedPaths $protAll -ExcludedPaths @($guard)).Allowed }
+
+Assert 'surgical filter at an excluded dir is refused'  (ExDeny $guard '*.tmp' 'None')
+Assert 'wholesale at an excluded dir is refused'        (ExDeny $guard '*' 'None')
+Assert 'RECURSE at an excluded dir is refused'          (ExDeny $guard '*' 'RECURSE')
+Assert 'REMOVESELF at an excluded dir is refused'       (ExDeny $guard '*' 'REMOVESELF')
+Assert 'a subdirectory of an excluded dir is refused'   (ExDeny (Join-Path $guard 'deep\er') '*.log' 'None')
+Assert 'recursing from an ancestor is refused'          (ExDeny $sandbox '*' 'RECURSE')
+Assert 'a sibling directory is unaffected'              (-not (ExDeny (Join-Path $sandbox 'other') '*.tmp' 'None'))
+Assert 'a non-recursive ancestor is unaffected'         (-not (ExDeny $sandbox '*.tmp' 'None'))
+
+# The built-in exemption must survive: this is the regression that would cripple winapp2.
+Assert 'built-in protected dir still allows a specific filter' `
+    ((Test-WinCleanTarget -Directory $env:SystemRoot -Filter '*.log' -Flag 'None' -ProtectedPaths $protAll).Allowed)
+
+# End to end: a rule aimed straight at an -IgnorePath directory must find nothing.
+New-TestFile 'userexcl\victim.tmp' | Out-Null
+$exIni = Join-Path $sandbox 'excl.ini'
+@"
+[Targets Excluded Dir *]
+Section=ExclTest
+FileKey1=%WINCLEANTESTROOT%\userexcl|*.tmp
+"@ | Set-Content -LiteralPath $exIni -Encoding utf8
+
+$exOut = Invoke-CliRaw @('-RuleSet', 'Winapp2', '-DatabasePath', $exIni,
+                         '-Protect', $guard, '-Apply', '-Force', '-Output', 'Json', '-Quiet')
+$exJson = $null
+try { $exJson = $exOut | ConvertFrom-Json } catch { }
+Assert-Equal 'nothing selected inside a -Protect path' 0 $exJson.TotalFiles
+Assert-Equal 'nothing deleted'                         0 $exJson.Deleted
+Assert 'the file is still there'                       (Test-Exists 'userexcl\victim.tmp')
+Assert 'the refusal was recorded'                      ($exJson.BlockedCount -ge 1)
+
 $env:LOCALAPPDATA = $realLocalAppData
 
 } finally {

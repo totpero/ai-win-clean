@@ -171,6 +171,9 @@ function Test-WinCleanTarget {
         [string] $Filter = '*',
         [ValidateSet('None', 'RECURSE', 'REMOVESELF')] [string] $Flag = 'None',
         [string[]] $ProtectedPaths = @(),
+        # User-declared "hands off": -Protect and -IgnorePath. Unlike $ProtectedPaths
+        # these admit NO exemption. See the block below for why the two differ.
+        [string[]] $ExcludedPaths = @(),
         [int] $MinDepth = 1
     )
 
@@ -216,6 +219,34 @@ function Test-WinCleanTarget {
                  [string]::IsNullOrWhiteSpace($Filter) -or
                  ($Filter -eq '*') -or
                  ($Filter -eq '*.*')
+
+    <#
+        User exclusions are absolute. This is the one place the rules deliberately differ
+        from $ProtectedPaths.
+
+        A built-in protected directory still permits a surgical, non-recursive filter,
+        because real rules depend on it - "%WinDir%|*.log" must keep working or the
+        database is crippled. That exemption is correct for paths WE chose to protect.
+
+        It is wrong for a path the USER named. "-IgnorePath D:\Projects" means "never
+        touch anything in here", and a rule targeting "D:\Projects|*.tmp" would sail
+        straight through the exemption. So these deny at the directory, anywhere beneath
+        it, and from any ancestor that would recurse into it - with no filter or flag
+        able to earn an exception.
+    #>
+    foreach ($ex in $ExcludedPaths) {
+        if (-not $ex) { continue }
+
+        if ($dir.Equals($ex, [StringComparison]::OrdinalIgnoreCase)) {
+            return [pscustomobject] @{ Allowed = $false; Reason = "Excluded by user: $dir" }
+        }
+        if (Test-WinCleanIsUnder -Child $dir -Parent $ex) {
+            return [pscustomobject] @{ Allowed = $false; Reason = "Inside user-excluded path '$ex': $dir" }
+        }
+        if ((Test-WinCleanIsUnder -Child $ex -Parent $dir) -and ($Flag -eq 'RECURSE' -or $Flag -eq 'REMOVESELF')) {
+            return [pscustomobject] @{ Allowed = $false; Reason = "Recursive delete would descend into user-excluded path '$ex': $dir" }
+        }
+    }
 
     foreach ($prot in $ProtectedPaths) {
 

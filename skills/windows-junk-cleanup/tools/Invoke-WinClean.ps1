@@ -530,9 +530,15 @@ if (-not $IncludeWarnings) {
 # --------------------------------------------------------------------------------------
 
 $isAdmin   = Test-WinCleanIsAdmin
-$extraProtected = @($Protect)
-if (-not $NoIgnoreList -and $ignoreList.Paths.Count -gt 0) { $extraProtected += $ignoreList.Paths }
-$protected = Get-WinCleanProtectedPath -Additional $extraProtected
+# -Protect and -IgnorePath are what the USER declared off-limits, so they are absolute
+# exclusions rather than entries on the built-in protected list. The built-in list
+# deliberately still allows a surgical filter inside a protected directory (that is what
+# makes "%WinDir%|*.log" work); applying that same exemption to a path the user named
+# would let "D:\Projects|*.tmp" straight through a -IgnorePath D:\Projects.
+$protected = Get-WinCleanProtectedPath
+$excluded  = @($Protect)
+if (-not $NoIgnoreList -and $ignoreList.Paths.Count -gt 0) { $excluded += $ignoreList.Paths }
+$excluded  = @($excluded | ForEach-Object { ConvertTo-WinCleanNormalPath $_ } | Where-Object { $_ } | Select-Object -Unique)
 $tokenMap  = Get-WinCleanTokenMap
 Clear-WinCleanDetectionCache
 
@@ -567,8 +573,9 @@ foreach ($rule in $selected) {
     # see most of it" - both otherwise look like a small number with no errors.
     if ($rule.NeedsAdmin -and -not $isAdmin) { $adminLimited++ }
 
-    $target = Get-WinCleanEntryTarget -Entry $rule -ProtectedPaths $protected -TokenMap $tokenMap `
-                                      -OlderThanDays $OlderThanDays -MinDepth $MinDepth -SeenFiles $seenFiles
+    $target = Get-WinCleanEntryTarget -Entry $rule -ProtectedPaths $protected -ExcludedPaths $excluded `
+                                      -TokenMap $tokenMap -OlderThanDays $OlderThanDays -MinDepth $MinDepth `
+                                      -SeenFiles $seenFiles
 
     foreach ($b in $target.Blocked) { $allBlocked.Add($b) }
 
@@ -593,8 +600,9 @@ foreach ($rule in $ignoredRules) {
     $ii++
     Show-WinCleanProgress -Current $ii -Total $ignoredRules.Count -Label "(ignored) $($rule.Name)"
     if (-not (Test-WinCleanDetection -Entry $rule -TokenMap $tokenMap)) { continue }
-    $t = Get-WinCleanEntryTarget -Entry $rule -ProtectedPaths $protected -TokenMap $tokenMap `
-                                 -OlderThanDays $OlderThanDays -MinDepth $MinDepth -SeenFiles $ignoredSeen
+    $t = Get-WinCleanEntryTarget -Entry $rule -ProtectedPaths $protected -ExcludedPaths $excluded `
+                                 -TokenMap $tokenMap -OlderThanDays $OlderThanDays -MinDepth $MinDepth `
+                                 -SeenFiles $ignoredSeen
     if ($t.FileCount -eq 0) { continue }
     $ignoredBytes += $t.Bytes
     $ignoredFiles += $t.FileCount
@@ -656,7 +664,8 @@ if ($Apply -and ($results.Count -gt 0 -or $EmptyRecycleBin)) {
         $logLines = New-Object System.Collections.Generic.List[string]
 
         foreach ($target in $results) {
-            $r = Remove-WinCleanTarget -Target $target -ProtectedPaths $protected -MinDepth $MinDepth -Confirm:$false
+            $r = Remove-WinCleanTarget -Target $target -ProtectedPaths $protected -ExcludedPaths $excluded `
+                                       -MinDepth $MinDepth -Confirm:$false
             $deleted += $r.Deleted
             $freed   += $r.BytesFreed
             foreach ($f in $r.Failed) { $failed.Add($f) }

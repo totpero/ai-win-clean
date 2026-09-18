@@ -253,6 +253,6 @@ deeper inside a protected path is allowed too; that is what most real rules do.
 powershell -NoProfile -ExecutionPolicy Bypass -File skills/windows-junk-cleanup/tools/tests/Test-WinClean.ps1
 ```
 
-169 tests build a throwaway filesystem and assert exactly which files are deleted and
+182 tests build a throwaway filesystem and assert exactly which files are deleted and
 which survive, including junction traversal, exclusions and protected paths. Run this
 after changing anything under `tools/lib/`.

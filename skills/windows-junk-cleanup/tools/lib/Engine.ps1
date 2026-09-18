@@ -303,6 +303,7 @@ function Get-WinCleanEntryTarget {
     param(
         [Parameter(Mandatory)] $Entry,
         [Parameter(Mandatory)] [string[]] $ProtectedPaths,
+        [string[]] $ExcludedPaths = @(),
         [System.Collections.IDictionary] $TokenMap,
         [int]      $OlderThanDays = 0,
         [int]      $MinDepth = 1,
@@ -336,7 +337,8 @@ function Get-WinCleanEntryTarget {
 
                 # ---- THE GATE. Nothing below this line runs on an unapproved path. ----
                 $verdict = Test-WinCleanTarget -Directory $dir -Filter $fk.Filter -Flag $fk.Flag `
-                                               -ProtectedPaths $ProtectedPaths -MinDepth $MinDepth
+                                               -ProtectedPaths $ProtectedPaths -ExcludedPaths $ExcludedPaths `
+                                               -MinDepth $MinDepth
                 if (-not $verdict.Allowed) {
                     $blocked.Add([pscustomobject] @{ Path = $dir; Reason = $verdict.Reason })
                     continue
@@ -439,6 +441,7 @@ function Remove-WinCleanTarget {
     param(
         [Parameter(Mandatory)] $Target,
         [Parameter(Mandatory)] [string[]] $ProtectedPaths,
+        [string[]] $ExcludedPaths = @(),
         [int] $MinDepth = 1
     )
 
@@ -448,7 +451,8 @@ function Remove-WinCleanTarget {
 
     foreach ($file in $Target.Files) {
         $verdict = Test-WinCleanTarget -Directory $file.DirectoryName -Filter $file.Name -Flag 'None' `
-                                       -ProtectedPaths $ProtectedPaths -MinDepth $MinDepth
+                                       -ProtectedPaths $ProtectedPaths -ExcludedPaths $ExcludedPaths `
+                                       -MinDepth $MinDepth
         if (-not $verdict.Allowed) {
             $failed.Add([pscustomobject] @{ Path = $file.FullName; Error = "Blocked at apply time: $($verdict.Reason)" })
             continue
@@ -475,7 +479,8 @@ function Remove-WinCleanTarget {
     $sortedDirs = @($Target.Directories | Sort-Object -Property { (Get-WinCleanPathDepth $_) } -Descending)
     foreach ($dir in $sortedDirs) {
         $verdict = Test-WinCleanTarget -Directory $dir -Filter '*' -Flag 'REMOVESELF' `
-                                       -ProtectedPaths $ProtectedPaths -MinDepth $MinDepth
+                                       -ProtectedPaths $ProtectedPaths -ExcludedPaths $ExcludedPaths `
+                                       -MinDepth $MinDepth
         if (-not $verdict.Allowed) {
             $failed.Add([pscustomobject] @{ Path = $dir; Error = "Blocked at apply time: $($verdict.Reason)" })
             continue
