@@ -1,8 +1,19 @@
 ---
 description: Scan Windows for junk files and report what can be freed (deletes nothing unless you approve)
-argument-hint: "[status | apply | update | section <name>]"
-allowed-tools: Bash(*win-clean.cmd*), Bash(*Invoke-WinClean.ps1*)
+argument-hint: "[status | apply | update | snooze | section <name>]"
 ---
+<!--
+  No allowed-tools on purpose. Claude Code's Bash patterns are prefix-based
+  (Bash(cmd:*)); a leading wildcard never matches, and the install path differs per
+  machine so no fixed prefix would work either. More to the point, this command can
+  delete files - the normal permission prompt is the right behaviour, not something
+  to pre-approve.
+-->
+
+<!--
+  Pass `scan` explicitly if you want to be unambiguous; no argument does the same thing.
+-->
+
 
 Run the Windows junk cleaner. Arguments: `$ARGUMENTS`
 

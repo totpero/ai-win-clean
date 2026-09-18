@@ -1,6 +1,25 @@
+<div align="center">
+
+<img src="assets/logo.svg" alt="ai-win-clean" width="128" height="128">
+
 # ai-win-clean
 
-An AI agent skill that cleans Windows junk files from the command line.
+**🧹 An AI agent skill that reclaims Windows disk space from the command line.**
+
+Scans and reports by default. Deletes only when you say so.
+
+```bash
+npx skills add totpero/ai-win-clean
+```
+
+[![Agent Skill](https://img.shields.io/badge/agent-skill-0EA5E9?style=flat-square)](https://www.skills.sh)
+[![Rules](https://img.shields.io/badge/winapp2-~4%2C000%20rules-38BDF8?style=flat-square)](https://github.com/MoscaDotTo/Winapp2)
+[![Tests](https://img.shields.io/badge/tests-138%20passing-22C55E?style=flat-square)](#tests)
+[![License](https://img.shields.io/badge/license-MIT-64748B?style=flat-square)](LICENSE)
+
+</div>
+
+---
 
 Driven by [winapp2](https://github.com/MoscaDotTo/Winapp2) — a community-maintained
 database of ~4,000 application cleaning rules — plus a built-in ruleset for the core
@@ -8,6 +27,9 @@ Windows caches winapp2 does not cover.
 
 Works with any agent that supports [Agent Skills](https://agentskills.io) (Claude Code,
 Codex, Cursor, Windsurf, Copilot, OpenCode), and as a plain CLI with no agent at all.
+
+> **Windows only.** The engine is PowerShell and targets Windows paths, services and the
+> registry; there is nothing useful here on macOS or Linux.
 
 ## Why
 
@@ -20,8 +42,17 @@ construction, deterministic output, 138 tests.
 
 ## Install
 
+Via the [skills.sh](https://www.skills.sh) package manager — installs into whichever
+agents you have:
+
+```bash
+npx skills add totpero/ai-win-clean
+```
+
+Or clone, which additionally gives you the `/win-clean` slash command and the hook:
+
 ```powershell
-git clone https://github.com/<you>/ai-win-clean
+git clone https://github.com/totpero/ai-win-clean
 cd ai-win-clean
 .\install.ps1 -AddCommand          # skill + /win-clean slash command
 .\install.ps1 -Agent All -All      # every agent, + hook, + PATH

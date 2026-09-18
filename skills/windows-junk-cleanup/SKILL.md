@@ -1,6 +1,18 @@
 ---
 name: windows-junk-cleanup
-description: 'Use when a Windows machine needs disk space reclaimed or junk removed - the C: drive is full or nearly full, "clean up my PC", browser and application caches, temp files, Windows Update leftovers, crash dumps, log files, thumbnail cache, or a request for CCleaner-style cleaning. Also use when asked what is consuming disk space before deleting anything.'
+displayName: "🧹 Windows Junk Cleanup — reclaim disk space using the winapp2 rule database"
+description: >
+  Use when a Windows machine needs disk space reclaimed or junk removed — the C: drive
+  is full or nearly full, "clean up my PC", "free up space", browser and application
+  caches, temp files, Windows Update leftovers, crash dumps, logs, thumbnail and shader
+  caches, or any request for CCleaner-style cleaning. Also use when asked what is
+  consuming disk space, before deleting anything. Scans and reports by default and
+  deletes only on an explicit flag, so it is safe to reach for just to answer "what
+  could I free?". Driven by the community winapp2 database (~4,000 rules) plus a
+  built-in ruleset for core Windows caches, behind a protection layer that refuses
+  drive roots and profile roots and never follows junctions.
+emoji: "🧹"
+homepage: https://github.com/totpero/ai-win-clean
 license: MIT
 ---
 

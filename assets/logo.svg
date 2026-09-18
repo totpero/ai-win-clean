@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="ai-win-clean: a broom sweeping a disk clean">
+  <title>ai-win-clean</title>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0B1220"/>
+    </linearGradient>
+
+    <linearGradient id="handle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#FCD34D"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+
+    <linearGradient id="bristles" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#FDE68A"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+
+    <linearGradient id="disk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+
+    <!-- The sweep arc fades out behind the broom rather than ending abruptly. -->
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#38BDF8" stop-opacity="0"/>
+      <stop offset="55%"  stop-color="#38BDF8" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="253" height="253" rx="54.5" fill="none" stroke="#334155" stroke-width="3"/>
+
+  <!-- Disk platter: what is being cleaned. It sits low and left so the broom, which
+       sweeps in from the upper right, never covers it. The bright arc is the portion
+       already reclaimed; the dark remainder is what is still occupied. -->
+  <g transform="translate(112 178)">
+    <ellipse cx="0" cy="0" rx="72" ry="28" fill="#0B1220" stroke="#1E3A5F" stroke-width="3.5"/>
+    <ellipse cx="0" cy="-3" rx="72" ry="28" fill="#111C2E"/>
+    <path d="M -72 -3 A 72 28 0 0 1 20 -30" fill="none" stroke="url(#disk)" stroke-width="8" stroke-linecap="round"/>
+    <ellipse cx="0" cy="-3" rx="15" ry="6.5" fill="#1E293B" stroke="#334155" stroke-width="2.5"/>
+  </g>
+
+  <!-- Motion trail: the broom's path in from the upper right -->
+  <path d="M 66 118 Q 130 88 206 96" fill="none" stroke="url(#sweep)" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Neural-net motif on the platter: the rules deciding what is junk. Reads as AI,
+       and doubles as circuitry on the disk surface. -->
+  <g transform="translate(112 178)" opacity="0.9">
+    <g stroke="#38BDF8" stroke-width="2.4" opacity="0.8" stroke-linecap="round">
+      <line x1="-46" y1="6"  x2="-16" y2="-8"/>
+      <line x1="-46" y1="6"  x2="-14" y2="14"/>
+      <line x1="-16" y1="-8" x2="18"  y2="4"/>
+      <line x1="-14" y1="14" x2="18"  y2="4"/>
+      <line x1="-16" y1="-8" x2="-14" y2="14"/>
+      <line x1="18"  y1="4"  x2="46"  y2="-6"/>
+    </g>
+    <g fill="#BAE6FD" stroke="#0B1220" stroke-width="1.5">
+      <circle cx="-46" cy="6"  r="4.5"/>
+      <circle cx="-16" cy="-8" r="5.5"/>
+      <circle cx="-14" cy="14" r="4.5"/>
+      <circle cx="18"  cy="4"  r="5.5"/>
+      <circle cx="46"  cy="-6" r="4"/>
+    </g>
+  </g>
+
+  <!-- Broom, sweeping down-left toward the platter -->
+  <g transform="translate(34 -18) rotate(28 150 120) scale(0.92)">
+    <rect x="143" y="30" width="14" height="88" rx="7" fill="url(#handle)"/>
+    <rect x="136" y="114" width="28" height="13" rx="4" fill="#B45309"/>
+    <path d="M 133 127 L 167 127 L 183 182 L 117 182 Z" fill="url(#bristles)"/>
+    <g stroke="#B45309" stroke-width="2.5" stroke-linecap="round" opacity="0.6">
+      <line x1="141" y1="134" x2="132" y2="176"/>
+      <line x1="150" y1="134" x2="150" y2="176"/>
+      <line x1="159" y1="134" x2="168" y2="176"/>
+    </g>
+  </g>
+
+  <!-- Swept-away particles turning into sparkles -->
+  <g fill="#7DD3FC">
+    <path d="M 56 70 l 5 12 12 5 -12 5 -5 12 -5 -12 -12 -5 12 -5 Z"/>
+    <path d="M 210 52 l 3.5 8.5 8.5 3.5 -8.5 3.5 -3.5 8.5 -3.5 -8.5 -8.5 -3.5 8.5 -3.5 Z" opacity="0.8"/>
+    <circle cx="92" cy="44" r="4.5" opacity="0.7"/>
+    <circle cx="36" cy="104" r="3.5" opacity="0.5"/>
+    <circle cx="228" cy="96" r="3.5" opacity="0.45"/>
+  </g>
+</svg>
