@@ -189,6 +189,6 @@ skills/windows-junk-cleanup/
 
 Tool: MIT (see [LICENSE](LICENSE)).
 
-Cleaning rules: [winapp2](https://github.com/MoscaDotTo/Winapp2), **CC-BY-SA-4.0**.
+Cleaning rules: [winapp2](https://github.com/MoscaDotTo/Winapp2), **CC-BY-SA-4.0** (see [NOTICE](NOTICE)).
 The database is downloaded at runtime rather than vendored; redistributing it or a
 derivative requires the same licence and attribution to the winapp2 project.

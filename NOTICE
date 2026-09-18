@@ -1,0 +1,16 @@
+ai-win-clean
+Copyright (c) 2026 totpero
+
+This product includes no third-party code.
+
+It does, at runtime, download the winapp2 cleaning-rule database:
+
+    https://github.com/MoscaDotTo/Winapp2
+    Licensed CC-BY-SA-4.0 by the winapp2 project.
+
+That database is a separate work and is NOT redistributed in this repository.
+If you redistribute it, or a work derived from it, you must do so under
+CC-BY-SA-4.0 with attribution to the winapp2 project.
+
+The parser, safety model, built-in ruleset, CLI and tests in this repository
+are original work, licensed MIT (see LICENSE).
