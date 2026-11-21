@@ -10,7 +10,10 @@ description: >
   deletes only on an explicit flag, so it is safe to reach for just to answer "what
   could I free?". Driven by the community winapp2 database (~4,000 rules) plus a
   built-in ruleset for core Windows caches, behind a protection layer that refuses
-  drive roots and profile roots and never follows junctions.
+  drive roots and profile roots and never follows junctions. Also covers the Claude
+  desktop app's own storage: freeing the worktrees of finished, archived or inactive Code
+  sessions and reporting its caches and logs ("clean Claude storage", "delete old
+  worktrees", "app caches and logs"), through the app's supported tools only.
 emoji: "🧹"
 homepage: https://github.com/totpero/ai-win-clean
 license: MIT
@@ -36,6 +39,7 @@ through; do not re-derive it. Read on only for `-Apply`, filtering, or troublesh
 | "what can I free?" | `win-clean.cmd -Output Brief -OlderThanDays 1` |
 | "update the rules" | `win-clean.cmd -UpdateDatabase -CheckUpdate` |
 | "stop reminding me" | `win-clean.cmd -SnoozeDays 30` |
+| "clean Claude storage", "delete old worktrees", "clear app caches and logs" | Not a script. Follow `claude-storage.md` (app tools, own approval) |
 
 ## Overview
 
@@ -60,6 +64,9 @@ produces the same result every run.
 - Crash dumps, WER reports, CBS and DISM logs, `Windows.old`
 - Any request for CCleaner/BleachBit-style cleaning
 - Finding out *what* is using space before deciding anything
+
+- Freeing the Claude app's own storage: worktrees of finished/archived/inactive sessions,
+  app caches and logs (see *Claude App Storage* below)
 
 **Do not use for:** uninstalling software, deleting user documents, registry "optimisation",
 disabling hibernation/pagefile, or `DISM /StartComponentCleanup` (run that separately —
@@ -169,6 +176,19 @@ deleted on a schedule — the notification exists so a human still sees the scan
 
 Full parameter semantics and the winapp2 format: `reference.md`.
 
+## Claude App Storage
+
+When the disk is full and the Claude desktop app is part of why (session worktrees, app
+caches and logs), the main scan will not help: those are not Windows junk, and the app's
+data folder must never be cleaned by script. Read `claude-storage.md` and follow it. In
+short: report with `get_storage_usage`, free the worktrees of inactive sessions with
+`clean_up_worktrees`, discard an archived session's leftover worktree with
+`discard_kept_worktree` only when the user names it, and point to **Settings › This computer
+› Storage › Clear cache** for caches and logs. Each destructive step needs the user's yes.
+
+Check which drive is actually short first: worktrees live inside their repositories and are
+often on a different drive from the one that is full.
+
 ## Defaults That Matter
 
 These are off unless you ask, because each is harder to undo than a cache file:
@@ -253,6 +273,6 @@ deeper inside a protected path is allowed too; that is what most real rules do.
 powershell -NoProfile -ExecutionPolicy Bypass -File skills/windows-junk-cleanup/tools/tests/Test-WinClean.ps1
 ```
 
-182 tests build a throwaway filesystem and assert exactly which files are deleted and
+193 tests build a throwaway filesystem and assert exactly which files are deleted and
 which survive, including junction traversal, exclusions and protected paths. Run this
 after changing anything under `tools/lib/`.
