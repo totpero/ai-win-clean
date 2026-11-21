@@ -41,7 +41,13 @@ try {
 
     if ($s.Due) {
         # One line, and only when it matters. The agent decides whether to surface it.
-        Write-Output "[disk] $($s.Summary). Run /win-clean to see what can be freed, or /win-clean snooze to mute for 30 days."
+        $line = "[disk] $($s.Summary). Run /win-clean to see what can be freed, or /win-clean snooze to mute for 30 days."
+        # The Claude app's own worktrees, history and caches can be a large share of the
+        # disk, and they are not Windows junk, so the main scan will not touch them.
+        if ($s.ClaudeAppFound) {
+            $line += " The Claude app's own storage (session worktrees, app caches and logs) is handled separately: run /win-clean claude."
+        }
+        Write-Output $line
     }
 
 } catch {

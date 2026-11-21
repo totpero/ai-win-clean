@@ -56,6 +56,7 @@ function Get-WinCleanDueStatus {
                 return [pscustomobject] @{
                     Due = $false; Reason = 'Snoozed'; Summary = ''
                     FreePercent = $(if ($disk) { $disk.FreePercent } else { $null })
+                    ClaudeAppFound = $false
                     DaysSinceClean = $null; SnoozedUntil = $state.SnoozeUntil
                 }
             }
@@ -115,7 +116,35 @@ function Get-WinCleanDueStatus {
         DatabaseVersion = $dbVersion
         DatabaseAgeDays = $dbAgeDays
         DatabaseStale   = ($null -ne $dbAgeDays -and $dbAgeDays -gt $MaxDatabaseAgeDays)
+        ClaudeAppFound  = (@(Get-WinCleanClaudeDataDir).Count -gt 0)
     }
+}
+
+<#
+    Locate the Claude desktop app's data folder(s) - detection only, nothing is measured,
+    opened or touched, so this is cheap enough for a session-start hook.
+
+    The app names its data folder Claude-Data, Claude-3p or Claude, under %LOCALAPPDATA%
+    or %APPDATA%. That folder holds the user's sessions, settings and sign-in, so this tool
+    never cleans inside it: reclaiming that space goes through the app's own supported
+    actions (see claude-storage.md). Knowing it exists is only used to decide whether a
+    low-disk notice should also point at the app's storage.
+#>
+function Get-WinCleanClaudeDataDir {
+    [CmdletBinding()]
+    param()
+
+    $found = New-Object System.Collections.Generic.List[string]
+    foreach ($root in @($env:LOCALAPPDATA, $env:APPDATA)) {
+        if ([string]::IsNullOrWhiteSpace($root)) { continue }
+        foreach ($name in @('Claude-Data', 'Claude-3p', 'Claude')) {
+            $p = Join-Path $root $name
+            if (Test-Path -LiteralPath $p -PathType Container) { $found.Add($p) }
+        }
+    }
+    # Callers wrap the call in @(): a leading comma here would turn an empty result into
+    # a one-element array holding an empty array, and "absent" would count as "found".
+    return $found.ToArray()
 }
 
 function Set-WinCleanSnooze {

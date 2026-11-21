@@ -669,6 +669,65 @@ $s = Get-WinCleanDueStatus -MinFreePercent 101 -DatabasePath $goodDb
 Assert 'clearing the snooze restores the prompt' $s.Due
 
 # ======================================================================================
+Describe 'Claude app data detection'
+# ======================================================================================
+
+# Both roots are sandboxed (LOCALAPPDATA already is), so the real app data folders on the
+# machine running the suite cannot influence the result.
+$realAppData = $env:APPDATA
+$env:APPDATA = Join-Path $sandbox 'roaming'
+New-Item -ItemType Directory -Path $env:APPDATA -Force | Out-Null
+
+try {
+    $n = @(Get-WinCleanClaudeDataDir).Count
+    Assert-Equal 'nothing found when the app is absent' 0 $n
+    $s = Get-WinCleanDueStatus -MinFreePercent 101 -DatabasePath $goodDb
+    Assert-Equal 'due status reports no app when absent' $false $s.ClaudeAppFound
+
+    $dataDir = Join-Path $env:LOCALAPPDATA 'Claude-Data'
+    New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+    $found = @(Get-WinCleanClaudeDataDir)
+    Assert-Equal 'finds the data folder under LOCALAPPDATA' 1 $found.Count
+    Assert-Equal 'returns its full path' $dataDir ([string] $found[0])
+    $s = Get-WinCleanDueStatus -MinFreePercent 101 -DatabasePath $goodDb
+    Assert-Equal 'due status reports the app when present' $true $s.ClaudeAppFound
+
+    New-Item -ItemType Directory -Path (Join-Path $env:APPDATA 'Claude') -Force | Out-Null
+    $n = @(Get-WinCleanClaudeDataDir).Count
+    Assert-Equal 'finds a second location under APPDATA' 2 $n
+
+    # A file that merely shares the name is not a data folder.
+    Set-Content -LiteralPath (Join-Path $env:APPDATA 'Claude-3p') -Value 'x'
+    $n = @(Get-WinCleanClaudeDataDir).Count
+    Assert-Equal 'a file named like a data folder is ignored' 2 $n
+
+    # Detection must be read-only: this runs in a session-start hook.
+    Assert-Equal 'detection leaves the data folder empty' 0 @(Get-ChildItem -LiteralPath $dataDir -Force).Count
+
+    # The hook only mentions the app's storage when the app is there and a clean is due.
+    $hook = Join-Path $here '..\..\..\..\hooks\winclean-notify.ps1'
+    if (Test-Path -LiteralPath $hook) {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $out = (& powershell -NoProfile -ExecutionPolicy Bypass -File $hook -MinFreePercent 101 2>&1 | Out-String)
+        } finally { $ErrorActionPreference = $prevEap }
+        Assert 'hook output points at /win-clean claude when the app is present' ($out -match '/win-clean claude') $out
+        Assert 'hook output still carries the disk notice' ($out -match '\[disk\]') $out
+
+        Remove-Item -LiteralPath $dataDir -Recurse -Force
+        Remove-Item -LiteralPath (Join-Path $env:APPDATA 'Claude') -Recurse -Force
+        $ErrorActionPreference = 'Continue'
+        try {
+            $out = (& powershell -NoProfile -ExecutionPolicy Bypass -File $hook -MinFreePercent 101 2>&1 | Out-String)
+        } finally { $ErrorActionPreference = $prevEap }
+        Assert 'hook stays silent about the app when it is absent' ($out -notmatch 'win-clean claude') $out
+    }
+} finally {
+    $env:APPDATA = $realAppData
+}
+
+# ======================================================================================
 Describe 'Persistent ignore list'
 # ======================================================================================
 

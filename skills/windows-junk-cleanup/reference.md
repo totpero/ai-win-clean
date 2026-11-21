@@ -383,7 +383,7 @@ skills/windows-junk-cleanup/
       Engine.ps1               detection, scanning, removal
       SystemRules.ps1          built-in Windows ruleset
     tests/
-      Test-WinClean.ps1        182 sandbox tests
+      Test-WinClean.ps1        193 sandbox tests
 ```
 
 ## Attribution

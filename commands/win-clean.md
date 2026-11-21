@@ -1,6 +1,6 @@
 ---
 description: Scan Windows for junk files and report what can be freed (deletes nothing unless you approve)
-argument-hint: "[status | apply | update | snooze | section <name>]"
+argument-hint: "[status | apply | update | snooze | claude | section <name>]"
 ---
 <!--
   No allowed-tools on purpose. Claude Code's Bash patterns are prefix-based
@@ -32,6 +32,15 @@ Pick the single command that matches the argument:
 | `section <name>` | `win-clean.cmd -Output Brief -Section '<name>'` |
 | `snooze` | `win-clean.cmd -SnoozeDays 30` |
 | `rollback` | `win-clean.cmd -RollbackDatabase` |
+| `claude` or `storage` | No script. Follow `claude-storage.md` in the skill folder (see below) |
+
+**`claude` / `storage`** frees the Claude app's own storage and is the one argument that does
+not run `win-clean.cmd`. Read the skill's `claude-storage.md` and follow it: report with
+`get_storage_usage`, then clean the worktrees of inactive sessions with `clean_up_worktrees`
+and discard an archived session's leftover worktree with `discard_kept_worktree` only when
+the user names it, then point to Settings › This computer › Storage › Clear cache for app
+caches and logs. Never delete anything inside the app's data folder by script, and get an
+explicit yes before each destructive step.
 
 The executable is `win-clean.cmd` in the skill's `tools` directory — typically
 `%USERPROFILE%\.claude\skills\windows-junk-cleanup\tools\win-clean.cmd`.

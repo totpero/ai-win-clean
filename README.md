@@ -14,7 +14,7 @@ npx skills add totpero/ai-win-clean
 
 [![Agent Skill](https://img.shields.io/badge/agent-skill-0EA5E9?style=flat-square)](https://www.skills.sh)
 [![Rules](https://img.shields.io/badge/winapp2-~4%2C000%20rules-38BDF8?style=flat-square)](https://github.com/MoscaDotTo/Winapp2)
-[![Tests](https://img.shields.io/badge/tests-182%20passing-22C55E?style=flat-square)](#tests)
+[![Tests](https://img.shields.io/badge/tests-193%20passing-22C55E?style=flat-square)](#tests)
 [![License](https://img.shields.io/badge/license-MIT-64748B?style=flat-square)](LICENSE)
 
 </div>
@@ -38,7 +38,7 @@ a dozen hard-coded paths, different every time, following junctions straight out
 own allowlist, with nothing machine-readable at the end.
 
 This replaces that with one audited tool: ~14,000 rules, protected paths refused by
-construction, deterministic output, 182 tests.
+construction, deterministic output, 193 tests.
 
 ## Install
 
@@ -137,6 +137,26 @@ tokens. Details and a scheduled-task variant in [hooks/README.md](hooks/README.m
 Nothing is ever deleted on a schedule. The notification exists precisely so a human still
 sees the scan first.
 
+## Freeing the Claude app's own storage
+
+The Claude desktop app keeps a git worktree for every Code session, plus conversation
+history, caches and logs. That can be tens of GB, and none of it is Windows junk, so the
+scan above does not touch it. `/win-clean claude` (or just asking) runs a separate workflow:
+
+1. **Report** what the app uses, and on which drive, with `get_storage_usage`.
+2. **Remove the worktrees of inactive sessions** with `clean_up_worktrees`. Sessions,
+   conversations and branches stay; a resumed session checks its branch out again.
+3. **Discard an archived session's leftover worktree** (kept because it had uncommitted
+   changes) with `discard_kept_worktree`, only for a session you name.
+4. **Caches and logs** are reported; clear them with **Settings › This computer › Storage ›
+   Clear cache**.
+
+It never deletes inside the app's data folder by script (that folder holds your sessions,
+settings and sign-in), and each destructive step needs your yes. When the low-disk hook
+fires and the app is installed, its notice mentions this command. It only works inside the
+app's Code tab; see [`claude-storage.md`](skills/windows-junk-cleanup/claude-storage.md) and
+[`docs/claude-storage-cleanup.md`](docs/claude-storage-cleanup.md).
+
 ## Safety
 
 Deleting is opt-in. So is every irreversible category:
@@ -164,7 +184,7 @@ Details and rationale: [`reference.md`](skills/windows-junk-cleanup/reference.md
 powershell -NoProfile -ExecutionPolicy Bypass -File skills\windows-junk-cleanup\tools\tests\Test-WinClean.ps1
 ```
 
-182 tests build a throwaway filesystem and assert exactly which files are deleted and
+193 tests build a throwaway filesystem and assert exactly which files are deleted and
 which survive — flags, filters, exclusions, detection gating, age filters, mid-path
 wildcards, junction traversal, protected paths, and that a dry run deletes nothing.
 
@@ -177,12 +197,13 @@ hooks/winclean-notify.ps1      cheap "is a clean due?" probe
 skills/windows-junk-cleanup/
   SKILL.md                     what an agent reads
   reference.md                 parameters, winapp2 format, safety model
+  claude-storage.md            Claude app storage workflow (worktrees, caches)
   tools/
     Invoke-WinClean.ps1        CLI
     win-clean.cmd / .sh        cmd and bash/WSL shims
     lib/                       Safety, Paths, Winapp2, Engine,
                                SystemRules, Database, Status
-    tests/                     182 sandbox tests
+    tests/                     193 sandbox tests
 ```
 
 ## Licence
