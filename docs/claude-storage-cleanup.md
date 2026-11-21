@@ -47,7 +47,9 @@ probes the system drive.
 - [x] `claude-storage.md` workflow, `SKILL.md` section, `/win-clean claude` argument
 - [x] Tests: 11 new (193 total), all passing
 - [x] README section
-- [ ] Merge to `main` (branch `feat/claude-storage-cleanup`, not yet pushed)
+- [x] Installed locally (skill, `/win-clean` command, SessionStart hook)
+- [x] PR [#2](https://github.com/totpero/ai-win-clean/pull/2) open from `feat/claude-storage-cleanup`
+- [ ] Merge to `main`, then delete the branch (local and remote)
 
 ## Open points
 
